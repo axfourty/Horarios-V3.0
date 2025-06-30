@@ -1,0 +1,1695 @@
+<!DOCTYPE html>
+<html lang="es" class="">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Horarios Contact Center v22</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.autotable.umd.min.js"></script>
+    
+    <script>
+        // Configuración de Tailwind para modo oscuro basado en clase
+        tailwind.config = {
+            darkMode: 'class',
+        }
+        // Script para aplicar el modo oscuro al cargar la página y evitar parpadeos
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .dragging {
+            opacity: 0.7;
+            cursor: grabbing !important;
+            z-index: 30;
+        }
+        .noselect {
+            -webkit-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+        .dragging * { cursor: grabbing !important; }
+        
+        .dragging-row {
+            opacity: 0.5;
+        }
+        .drop-target-row {
+            outline: 2px dashed #2563eb;
+            outline-offset: -2px;
+        }
+
+        @keyframes pulse-red {
+            0%, 100% { background-color: #fecaca; }
+            50% { background-color: #ef4444; color: white; }
+        }
+        .dark .gap-alert-cell {
+            animation: pulse-red-dark 2s infinite;
+        }
+        @keyframes pulse-red-dark {
+            0%, 100% { background-color: #991b1b; }
+            50% { background-color: #ef4444; color: white; }
+        }
+
+        .gap-alert-cell { animation: pulse-red 2s infinite; }
+        .break-block { cursor: ew-resize; }
+
+        [contenteditable]:focus {
+            outline: 2px solid #3b82f6;
+            background-color: #eff6ff;
+            border-radius: 4px;
+        }
+         .dark [contenteditable]:focus {
+            background-color: #1e3a8a;
+        }
+
+        .view-btn-active {
+            background-color: #2563eb !important;
+            color: white !important;
+        }
+         .dark .view-btn-active {
+            background-color: #3b82f6 !important;
+        }
+
+        @keyframes toast-in {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .toast {
+            animation: toast-in 0.5s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300 noselect">
+
+    <div class="max-w-full mx-auto p-4 md:p-8">
+        <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+            <div class="flex-1 min-w-[300px]">
+                <h1 class="text-2xl md:text-3xl font-bold text-gray-800 dark:text-white">Sistema de Horarios Contact Center</h1>
+                <p class="text-gray-500 dark:text-gray-400">Mueve los turnos o sus descansos para ajustar la planificación.</p>
+            </div>
+             <!-- Botón de Modo Oscuro -->
+            <div class="flex items-center gap-4">
+                 <div id="global-alerts-container" class="flex items-start gap-4"></div>
+                 <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
+                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 5.05A1 1 0 003.636 6.464l.707.707a1 1 0 001.414-1.414l-.707-.707zM4 10a1 1 0 11-2 0 4 4 0 018 0 1 1 0 11-2 0 2 2 0 00-4 0zM15 11a1 1 0 100-2h-1a1 1 0 100 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8 lg:items-start">
+            <div class="flex-grow flex flex-col gap-8">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+                    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                        <div class="flex flex-grow items-center gap-2 min-w-[300px]">
+                            <input id="search-advisor-input" type="search" placeholder="Buscar asesor por nombre..." class="flex-grow p-2 border rounded-lg text-sm bg-gray-50 dark:bg-gray-700 border-gray-300 dark:border-gray-600 dark:placeholder-gray-400 transition-all focus:ring-2 focus:ring-blue-400">
+                             <button id="shuffle-names-button" class="p-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors flex-shrink-0" title="Mezclar nombres de asesores">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-gray-600 dark:text-gray-300">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-14.96 0l3.182-3.182a8.25 8.25 0 0111.664 0l3.182 3.182" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="view-switcher" class="flex p-1 bg-gray-200 dark:bg-gray-700 rounded-lg">
+                            <button id="daily-view-btn" class="px-3 py-1 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300">Vista Diaria</button>
+                            <button id="weekly-view-btn" class="px-3 py-1 text-sm font-semibold rounded-md text-gray-700 dark:text-gray-300">Vista Semanal</button>
+                        </div>
+                    </div>
+                    <div id="daily-view-container" class="overflow-x-auto relative"></div>
+                    <div id="weekly-view-container" class="overflow-x-auto relative hidden"></div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold text-gray-700 dark:text-gray-100">Demanda de Asesores Requerida</h2>
+                        <button id="edit-demand-button" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-1 px-3 rounded-lg text-sm transition-colors flex items-center gap-2">
+                           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                           <span>Editar Demanda</span>
+                        </button>
+                    </div>
+                    <div id="demand-table-container" class="overflow-x-auto"></div>
+                </div>
+            </div>
+
+            <div class="w-full lg:w-80 flex-shrink-0">
+                <div class="flex gap-4 mb-4">
+                    <div id="status-summary-container" class="w-1/2"></div>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 w-1/2">
+                        <h3 class="font-bold text-md mb-2 text-gray-700 dark:text-gray-200">Exportar</h3>
+                        <div class="flex flex-col gap-2">
+                            <button id="export-csv-button" class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                                <span>a CSV</span>
+                            </button>
+                            <button id="export-pdf-button" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                                <span>a PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="weekly-status-summary-container" class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-4"></div>
+
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-4">
+                    <h3 class="font-bold text-lg mb-4 text-gray-700 dark:text-gray-200">Selección de Día</h3>
+                    <ul id="day-selector" class="grid grid-cols-2 gap-2"></ul>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-4">
+                    <h3 class="font-bold text-md mb-2 text-gray-700 dark:text-gray-200">Acciones</h3>
+                    <div class="flex flex-col gap-2">
+                        <button id="add-advisor-button" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                            <span>Añadir Asesor</span>
+                        </button>
+                        <button id="randomize-button" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                             <span>🎲 Recrear (Aleatorio)</span>
+                        </button>
+                        <button id="fixed-randomize-button" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.181-3.183m-14.96 0l3.182-3.182a8.25 8.25 0 0111.664 0l3.182 3.182" /></svg>
+                            <span>Recrear (Fijos)</span>
+                        </button>
+                         <button id="guided-gen-button" class="w-full bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                            <span>✨ Crear Guiado...</span>
+                        </button>
+                        <button id="edit-guided-gen-button" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg>
+                            <span>Editar Guiado</span>
+                        </button>
+                        <div class="flex gap-2">
+                             <button id="save-button" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v12a1 1 0 11-2 0V4H7a1 1 0 110-2z" /><path d="M3 12a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" /></svg>
+                                <span>Guardar</span>
+                            </button>
+                            <button id="reset-button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-1.5 px-3 rounded-lg text-sm transition-colors flex items-center justify-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 110 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd" /></svg>
+                                <span>Restaurar</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 mb-4">
+                    <h3 class="font-bold text-md mb-2 text-gray-700 dark:text-gray-200">Horarios Guardados</h3>
+                    <div id="saved-schedules-list" class="space-y-1 max-h-24 overflow-y-auto pr-2"></div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+                    <h3 class="font-bold text-lg mb-2 text-gray-700 dark:text-gray-200">Leyenda</h3>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                        <div class="flex items-center"><div class="w-4 h-4 rounded-full mr-2 bg-green-500"></div><span>Apertura</span></div>
+                        <div class="flex items-center"><div class="w-4 h-4 rounded-full mr-2 bg-purple-500"></div><span>Cierre</span></div>
+                        <div class="flex items-center"><div class="w-4 h-4 rounded-full mr-2 bg-sky-500"></div><span>Intermedio</span></div>
+                        <div class="flex items-center"><div class="w-5 h-5 rounded-sm mr-2 bg-white dark:bg-gray-600 border-2 border-dashed border-sky-700 dark:border-sky-400"></div><span>Descanso</span></div>
+                        <div class="flex items-center col-span-2"><div class="w-5 h-5 rounded-sm mr-2 border bg-gray-200 dark:bg-gray-600 border-gray-300 dark:border-gray-500"></div><span>Día Libre</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-white dark:bg-gray-800 p-4 md:p-6 rounded-lg shadow-md border border-gray-200 dark:border-gray-700">
+            <h2 class="text-xl font-bold text-gray-700 dark:text-gray-100 mb-4">Resumen de Horarios y Carga Laboral</h2>
+            <div id="advisor-schedule-summary-container" class="overflow-x-auto"></div>
+        </div>
+
+    </div>
+    
+    <!-- Modals de confirmación existentes -->
+    <div id="weekly-edit-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md mx-auto w-full">
+            <h3 id="modal-title" class="text-lg font-bold text-gray-900 dark:text-white mb-4">Editar Horario</h3>
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <label for="work-status-toggle" class="font-medium text-gray-700 dark:text-gray-300">Estado del día</label>
+                    <button id="work-status-toggle" class="px-4 py-2 rounded-lg font-semibold text-sm"></button>
+                </div>
+                <div id="shift-details" class="space-y-3 hidden">
+                    <div>
+                        <label for="start-time-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Inicio</label>
+                        <select id="start-time-select" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    </div>
+                    <div>
+                        <label for="break-time-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora de Descanso</label>
+                        <select id="break-time-select" class="w-full p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button data-action="cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="save-weekly-edit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">Guardar</button>
+            </div>
+        </div>
+    </div>
+    <div id="delete-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-sm mx-auto">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Confirmar Eliminación</h3>
+            <p class="my-4 text-gray-600 dark:text-gray-300">¿Estás seguro de que quieres eliminar a <strong id="advisor-name-to-delete"></strong>? Esta acción no se puede deshacer.</p>
+            <div class="flex justify-end space-x-4 mt-6">
+                 <button data-action="cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="confirm-delete" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">Eliminar</button>
+            </div>
+        </div>
+    </div>
+    <div id="reset-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-sm mx-auto">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Confirmar Restauración</h3>
+            <p class="my-4 text-gray-600 dark:text-gray-300">¿Estás seguro de que quieres borrar todos los cambios guardados y restaurar los horarios por defecto? Esta acción no se puede deshacer.</p>
+            <div class="flex justify-end space-x-4 mt-6">
+                 <button data-action="cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="confirm-reset" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">Restaurar</button>
+            </div>
+        </div>
+    </div>
+    <div id="save-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-sm mx-auto">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Guardar Horario</h3>
+            <p class="my-2 text-gray-600 dark:text-gray-300">Introduce un nombre para esta versión del horario.</p>
+            <input type="text" id="save-name-input" class="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 p-2 rounded-lg mt-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+            <div class="flex justify-end space-x-4 mt-6">
+                 <button data-action="cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="confirm-save" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">Guardar</button>
+            </div>
+        </div>
+    </div>
+    <div id="delete-saved-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl max-w-sm mx-auto">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white">Confirmar Eliminación</h3>
+            <p class="my-4 text-gray-600 dark:text-gray-300">¿Estás seguro de que quieres eliminar el horario guardado <strong id="schedule-name-to-delete"></strong>? Esta acción no se puede deshacer.</p>
+            <div class="flex justify-end space-x-4 mt-6">
+                 <button data-action="cancel" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="confirm-delete-saved" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold transition-colors">Eliminar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL DE GENERACIÓN GUIADA -->
+    <div id="guided-gen-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white">Asistente de Generación Guiada</h3>
+                <button id="guided-gen-close-btn" class="p-2 -m-2 text-2xl text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+
+            <div id="guided-gen-steps-container" class="flex-grow overflow-y-auto pr-2">
+                <div id="guided-gen-step-1">
+                    <div class="flex justify-between items-end mb-4 pb-2 border-b dark:border-gray-700">
+                        <div>
+                            <h4 class="text-lg font-semibold">Paso 1: Asignar Días Libres</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Define cuántos asesores tendrán cada combinación de días libres.</p>
+                        </div>
+                        <div class="text-right">
+                             <button id="fill-random-days-off" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded mb-1">Llenar Aleatorio</button>
+                            <p class="text-sm font-medium">Asesores con días libres:</p>
+                            <p class="text-2xl font-bold"><span id="days-off-assigned-count">0</span> / <span id="days-off-total-count">0</span></p>
+                        </div>
+                    </div>
+                    <div id="days-off-config-container" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4"></div>
+                </div>
+
+                <div id="guided-gen-step-2" class="hidden">
+                    <div class="flex justify-between items-end mb-4 pb-2 border-b dark:border-gray-700">
+                        <div>
+                            <h4 class="text-lg font-semibold">Paso 2: Asignar Turnos Fijos Semanales</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Asigna un turno fijo a cada asesor para su semana laboral.</p>
+                        </div>
+                        <div class="text-right">
+                            <button id="fill-random-shifts" class="text-xs bg-blue-500 hover:bg-blue-600 text-white font-semibold py-1 px-2 rounded mb-1">Llenar Aleatorio</button>
+                            <p class="text-sm font-medium">Asesores con turno asignado:</p>
+                            <p class="text-2xl font-bold"><span id="shifts-assigned-count">0</span> / <span id="shifts-total-count">0</span></p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+                        <div>
+                            <h5 class="font-bold text-center mb-2 pb-1 border-b-2 border-green-500">Turnos (Lunes a Domingo)</h5>
+                            <div id="shifts-config-container-allweek" class="space-y-3"></div>
+                        </div>
+                        <div>
+                             <h5 class="font-bold text-center mb-2 pb-1 border-b-2 border-orange-500">Turnos Exclusivos (Lunes a Viernes)</h5>
+                            <div id="shifts-config-container-weekday" class="space-y-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="guided-gen-alert" class="hidden mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-2 rounded-lg text-sm"></div>
+
+            <div class="flex justify-end space-x-3 mt-6 pt-4 border-t dark:border-gray-700 flex-shrink-0">
+                <button id="guided-gen-cancel-btn" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 rounded-lg transition-colors">Cancelar</button>
+                <button id="guided-gen-back-btn" class="hidden px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">Atrás</button>
+                <button id="guided-gen-next-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors">Siguiente</button>
+                <button id="guided-gen-finish-btn" class="hidden px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-semibold transition-colors">Generar Horario</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-3"></div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- CONSTANTES Y ESTADO INICIAL ---
+        const DIAS_SEMANA = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
+        let CUBRIMIENTO_REQUERIDO = {}; 
+        
+        const TURNOS_POSIBLES = [
+            { id: 1, inicio: 7, descanso: 12, label: "07-16 (D:12)" }, 
+            { id: 2, inicio: 8, descanso: 12, label: "08-17 (D:12)" }, 
+            { id: 3, inicio: 8, descanso: 13, label: "08-17 (D:13)" },
+            { id: 4, inicio: 8, descanso: 14, label: "08-17 (D:14)" },
+            { id: 5, inicio: 9, descanso: 13, label: "09-18 (D:13)" },
+            { id: 6, inicio: 9, descanso: 14, label: "09-18 (D:14)" },
+            { id: 7, inicio: 10, descanso: 14, label: "10-19 (D:14)" },
+            { id: 8, inicio: 11, descanso: 14, label: "11-20 (D:14)" },
+            { id: 12, inicio: 12, descanso: undefined, label: "12-20 (Sin D)" },
+            { id: 9, inicio: 12, descanso: 16, label: "12-21 (D:16)" },
+            { id: 13, inicio: 13, descanso: undefined, label: "13-21 (Sin D)" },
+            { id: 10, inicio: 13, descanso: 17, label: "13-22 (D:17)" },
+            { id: 11, inicio: 14, descanso: undefined, label: "14-22 (Sin D)" }
+        ];
+        const WEEKDAY_ONLY_SHIFT_IDS = [9, 10, 11, 13];
+        const WEEKEND_OFF_GROUP_INDEX = 0;
+
+        const GRUPOS_LIBRES = [
+            ['SABADO', 'DOMINGO'], ['LUNES', 'MARTES'], ['MIERCOLES', 'JUEVES'], ['VIERNES', 'SABADO'],
+            ['MARTES', 'MIERCOLES'], ['JUEVES', 'VIERNES'], ['DOMINGO', 'LUNES']
+        ];
+        
+        const defaultCoverage = {
+            LUNES:     { 7: 3, 8: 8, 9: 10, 10: 10, 11: 10, 12: 10, 13: 10, 14: 11, 15: 11, 16: 11, 17: 9, 18: 7, 19: 6, 20: 3, 21: 1 },
+            MARTES:    { 7: 4, 8: 10, 9: 9, 10: 10, 11: 9, 12: 10, 13: 9, 14: 10, 15: 11, 16: 11, 17: 9, 18: 7, 19: 6, 20: 3, 21: 1 },
+            MIERCOLES: { 7: 3, 8: 7, 9: 9, 10: 10, 11: 10, 12: 10, 13: 10, 14: 10, 15: 11, 16: 10, 17: 8, 18: 7, 19: 5, 20: 2, 21: 0 },
+            JUEVES:    { 7: 4, 8: 8, 9: 9, 10: 11, 11: 9, 12: 8, 13: 9, 14: 10, 15: 10, 16: 9, 17: 9, 18: 7, 19: 5, 20: 2, 21: 1 },
+            VIERNES:   { 7: 5, 8: 10, 9: 10, 10: 8, 11: 8, 12: 8, 13: 8, 14: 8, 15: 8, 16: 8, 17: 7, 18: 8, 19: 6, 20: 4, 21: 3 },
+            SABADO:    { 7: 7, 8: 11, 9: 6, 10: 6, 11: 6, 12: 11, 13: 11, 14: 11, 15: 11, 16: 10, 17: 10, 18: 5, 19: 4, 20: 1 },
+            DOMINGO:   { 7: 9, 8: 12, 9: 12, 10: 12, 11: 12, 12: 11, 13: 11, 14: 11, 15: 4, 16: 4, 17: 4, 18: 4, 19: 3, 20: 1 }
+        };
+
+        let asesores = [];
+        let estado = { currentView: 'daily', currentDay: 'LUNES', dragInfo: {}, isDemandEditMode: false };
+        let guidedGenConfig = {}; 
+        let lastGuidedGenConfig = null;
+
+        const dailyViewContainer = document.getElementById('daily-view-container');
+        const weeklyViewContainer = document.getElementById('weekly-view-container');
+        const daySelector = document.getElementById('day-selector');
+        const statusSummaryContainer = document.getElementById('status-summary-container');
+        const weeklyStatusSummaryContainer = document.getElementById('weekly-status-summary-container');
+        const advisorScheduleSummaryContainer = document.getElementById('advisor-schedule-summary-container');
+        const globalAlertsContainer = document.getElementById('global-alerts-container');
+        const savedSchedulesList = document.getElementById('saved-schedules-list');
+        const demandTableContainer = document.getElementById('demand-table-container');
+        const guidedGenModal = document.getElementById('guided-gen-modal');
+        const guidedGenAlert = document.getElementById('guided-gen-alert');
+        const editGuidedGenButton = document.getElementById('edit-guided-gen-button');
+        const themeToggleButton = document.getElementById('theme-toggle');
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500'
+            };
+
+            toast.className = `toast text-white px-4 py-2 rounded-lg shadow-lg ${colors[type]}`;
+            toast.textContent = message;
+
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        function loadDemandData() {
+            const savedDemand = localStorage.getItem('contactCenter_demandData');
+            CUBRIMIENTO_REQUERIDO = savedDemand ? JSON.parse(savedDemand) : JSON.parse(JSON.stringify(defaultCoverage));
+        }
+        
+        function getHorasDelDia(dia) {
+            if (!dia) return Array.from({ length: 15 }, (_, i) => i + 7);
+            if (dia === 'SABADO' || dia === 'DOMINGO') { return Array.from({ length: 13 }, (_, i) => i + 7); }
+            return Array.from({ length: 15 }, (_, i) => i + 7);
+        }
+
+        function generateInitialSchedules() {
+            const nombres = [ "CHRISTIAN BRIONES", "CRISTHIAN CHIPRE", "CYNTHIA NARVAEZ", "ERIKA SORIA", "FIDEL GUARANDA", "GABRIELA VALDIVIEZO", "GEMA INTRIAGO", "HENRY BONILLA", "JAVIER FLORES", "JHON PICOITA", "JOHANNA ERAS", "JONNATHAN BOLANOS", "MANUEL CASTRO", "MARIA VELEZ", "NATHALY ROMO", "PAUL SANCHEZ", "RICARDO ORTIZ", "TATIANA NAUTA", "VICTOR KEY", "YHUBER MERINO" ];
+            const initialAdvisors = nombres.map((nombre, index) => ({ id: Date.now() + index, nombre, horario: {} }));
+            let generatedSchedules = randomizeSchedulesLogic(initialAdvisors);
+            return optimizeCoverage(generatedSchedules);
+        }
+        
+        function randomizeSchedulesLogic(advisorList) {
+            const tempAdvisors = JSON.parse(JSON.stringify(advisorList));
+            const aperturaShift = TURNOS_POSIBLES.find(t => t.inicio === 7);
+            const cierreSemanaShift1 = TURNOS_POSIBLES.find(t => t.id === 10);
+            const cierreSemanaShift2 = TURNOS_POSIBLES.find(t => t.id === 11);
+            const cierreFinDeSemanaShift = TURNOS_POSIBLES.find(t => t.id === 8);
+            const fillerShifts = TURNOS_POSIBLES.filter(t => ![aperturaShift.id, cierreSemanaShift1.id, cierreSemanaShift2.id, cierreFinDeSemanaShift.id].includes(t.id));
+            
+            const shuffledGruposLibres = [...GRUPOS_LIBRES].sort(() => 0.5 - Math.random());
+            tempAdvisors.forEach((asesor, index) => {
+                const libres = shuffledGruposLibres[index % shuffledGruposLibres.length];
+                DIAS_SEMANA.forEach(dia => { asesor.horario[dia] = libres.includes(dia) ? 'LIBRE' : {}; });
+            });
+
+            DIAS_SEMANA.forEach(dia => {
+                let availableAdvisorsToday = tempAdvisors.filter(a => a.horario[dia] !== 'LIBRE').sort(() => 0.5 - Math.random());
+                if (availableAdvisorsToday.length < 4) {
+                       availableAdvisorsToday.forEach(asesor => {
+                            const randomShift = TURNOS_POSIBLES[Math.floor(Math.random() * TURNOS_POSIBLES.length)];
+                            if(isShiftValidForDay(randomShift, dia)) {
+                                asesor.horario[dia] = { inicio: randomShift.inicio, descanso: randomShift.descanso };
+                            } else { // Assign a default valid shift
+                                asesor.horario[dia] = { inicio: 7, descanso: 12 };
+                            }
+                       });
+                       return;
+                }
+
+                availableAdvisorsToday.splice(0, 2).forEach(asesor => { asesor.horario[dia] = { inicio: aperturaShift.inicio, descanso: aperturaShift.descanso }; });
+                
+                const isWeekend = dia === 'SABADO' || dia === 'DOMINGO';
+                if (isWeekend) {
+                    availableAdvisorsToday.splice(0, 2).forEach(asesor => { asesor.horario[dia] = { inicio: cierreFinDeSemanaShift.inicio, descanso: cierreFinDeSemanaShift.descanso }; });
+                } else {
+                    const closeAdvisors = availableAdvisorsToday.splice(0, 2);
+                    if(closeAdvisors[0]) closeAdvisors[0].horario[dia] = { inicio: cierreSemanaShift1.inicio, descanso: cierreSemanaShift1.descanso };
+                    if(closeAdvisors[1]) closeAdvisors[1].horario[dia] = { inicio: cierreSemanaShift2.inicio, descanso: cierreSemanaShift2.descanso };
+                }
+
+                availableAdvisorsToday.forEach(asesor => {
+                    let randomFiller;
+                    do {
+                        randomFiller = fillerShifts[Math.floor(Math.random() * fillerShifts.length)];
+                    } while (!isShiftValidForDay(randomFiller, dia));
+                    asesor.horario[dia] = { inicio: randomFiller.inicio, descanso: randomFiller.descanso };
+                });
+            });
+            return tempAdvisors;
+        }
+
+        function isShiftValidForDay(shift, day) {
+            const isWeekend = day === 'SABADO' || day === 'DOMINGO';
+            return !(isWeekend && WEEKDAY_ONLY_SHIFT_IDS.includes(shift.id));
+        }
+
+        function calculateHourlyTotals(day, advisorList = asesores) {
+            const horasDelDia = getHorasDelDia(day);
+            const totals = {};
+            horasDelDia.forEach(hora => {
+                totals[hora] = advisorList.reduce((total, asesor) => {
+                    const turno = asesor.horario[day];
+                    if (typeof turno === 'object' && turno !== null && turno.hasOwnProperty('inicio')) {
+                        const duracionTotal = turno.descanso !== undefined ? 9 : 8;
+                        const horaFin = turno.inicio + duracionTotal;
+                        if (turno.descanso === hora) return total; 
+                        if (turno.inicio <= hora && hora < horaFin) return total + 1;
+                    }
+                    return total;
+                }, 0);
+            });
+            return totals;
+        }
+
+        function updateAllSummariesAndState() {
+            saveLastState();
+            renderDailySchedule();
+            renderWeeklySchedule();
+            
+            if (estado.currentView === 'daily') {
+                dailyViewContainer.classList.remove('hidden');
+                weeklyViewContainer.classList.add('hidden');
+            } else {
+                dailyViewContainer.classList.add('hidden');
+                weeklyViewContainer.classList.remove('hidden');
+            }
+            
+            renderAdvisorStatusSummary();
+            renderWeeklyStatusSummary();
+            renderAdvisorScheduleSummary();
+            renderDemandTable(); 
+            updateTotalsAndAlerts();
+        }
+        
+        function renderActiveView() {
+            if (estado.currentView === 'daily') {
+                dailyViewContainer.classList.remove('hidden');
+                weeklyViewContainer.classList.add('hidden');
+            } else {
+                weeklyViewContainer.classList.add('hidden');
+                dailyViewContainer.classList.remove('hidden');
+            }
+            updateTotalsAndAlerts();
+        }
+
+        function renderDailySchedule() {
+            dailyViewContainer.innerHTML = '';
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            const nameColWidth = '220px';
+            const statusColWidth = '40px';
+            const gridColsStyle = `${nameColWidth} ${statusColWidth} repeat(${horasDelDia.length}, minmax(38px, 1fr))`;
+            
+            const header = document.createElement('div');
+            header.style.display = 'grid';
+            header.style.gridTemplateColumns = gridColsStyle;
+            header.className = 'sticky top-0 bg-white dark:bg-gray-800 z-20 shadow-sm';
+            header.innerHTML = `
+                <div class="p-2 text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 border-b border-r border-gray-300 dark:border-gray-700 flex items-center">Asesor</div>
+                <div class="p-2 text-sm font-bold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 border-b border-r border-gray-300 dark:border-gray-700 text-center flex items-center justify-center" title="Estado (Trabaja/Libre)">E</div>
+                ${horasDelDia.map(h => `<div class="px-1 py-2 text-xs text-center font-semibold bg-gray-100 dark:bg-gray-700/30 border-b border-r border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 flex items-center justify-center">${h.toString().padStart(2, '0')}:00</div>`).join('')}`;
+            dailyViewContainer.appendChild(header);
+            
+            const advisorsContainer = document.createElement('div');
+            advisorsContainer.id = 'advisors-grid-container';
+            asesores.forEach((asesor, index) => {
+                const advisorRow = document.createElement('div');
+                advisorRow.className = 'advisor-row relative';
+                advisorRow.dataset.asesorId = asesor.id;
+                advisorRow.draggable = true;
+                advisorRow.style.display = 'grid';
+                advisorRow.style.gridTemplateColumns = gridColsStyle;
+                const bgColor = index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50';
+                advisorRow.innerHTML = `
+                    <div class="py-1.5 px-3 text-sm font-medium border-b border-r border-gray-300 dark:border-gray-700 flex items-center justify-between ${bgColor}">
+                        <div class="flex items-center gap-2 flex-grow">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-400 cursor-move" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v12a1 1 0 11-2 0V4a1 1 0 011-1zM4 10a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
+                            <span class="advisor-name flex-grow p-1 -m-1 rounded-md transition-all font-semibold text-gray-700 dark:text-gray-100">${asesor.nombre}</span>
+                        </div>
+                        <div class="flex items-center space-x-1 flex-shrink-0">
+                            <button data-action="edit-advisor" class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600" title="Editar nombre"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 hover:text-blue-500" viewBox="0 0 20 20" fill="currentColor"><path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" /><path fill-rule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clip-rule="evenodd" /></svg></button>
+                            <button data-action="delete-advisor" class="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600" title="Eliminar asesor"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400 hover:text-red-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg></button>
+                        </div>
+                    </div>
+                    <div class="status-indicator-cell p-2 font-medium border-b border-r border-gray-300 dark:border-gray-700 flex items-center justify-center ${bgColor}" data-action="toggle-workday"></div>
+                    ${horasDelDia.map(() => `<div class="border-b border-r border-gray-300 dark:border-gray-700 ${bgColor}"></div>`).join('')}`;
+                advisorsContainer.appendChild(advisorRow);
+            });
+            dailyViewContainer.appendChild(advisorsContainer);
+
+            const totalsRowContainer = document.createElement('div');
+            totalsRowContainer.className = 'sticky bottom-0 bg-white dark:bg-gray-800 z-20 shadow-inner';
+            totalsRowContainer.style.display = 'grid';
+            totalsRowContainer.style.gridTemplateColumns = gridColsStyle;
+            totalsRowContainer.innerHTML = `
+                <div id="totals-row" style="grid-column: 1 / -1; display: contents;"></div>
+                <div id="difference-row" style="grid-column: 1 / -1; display: contents;"></div>
+                <div id="demand-row" style="grid-column: 1 / -1; display: contents;"></div>`;
+            dailyViewContainer.appendChild(totalsRowContainer);
+
+            renderAllShiftBlocks();
+            renderDemandRow();
+            renderDifferenceRow();
+        }
+
+        function renderWeeklySchedule() {
+            weeklyViewContainer.innerHTML = '';
+            let tableHTML = `<table class="w-full border-collapse"><thead><tr class="bg-gray-200 dark:bg-gray-700/50">
+                <th class="p-2 border border-gray-300 dark:border-gray-700 text-left text-sm font-bold text-gray-600 dark:text-gray-300">Asesor</th>
+                ${DIAS_SEMANA.map(dia => `<th class="p-2 border border-gray-300 dark:border-gray-700 text-center text-sm font-bold text-gray-600 dark:text-gray-300">${dia.charAt(0) + dia.slice(1).toLowerCase()}</th>`).join('')}
+            </tr></thead><tbody>`;
+
+            asesores.forEach((asesor, index) => {
+                const bgColor = index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50';
+                tableHTML += `<tr class="${bgColor}">
+                    <td class="p-2 border border-gray-300 dark:border-gray-700 text-sm font-semibold text-gray-800 dark:text-gray-100">${asesor.nombre}</td>`;
+                DIAS_SEMANA.forEach(dia => {
+                    const turno = asesor.horario[dia];
+                    let cellContent = '';
+                    let cellClass = 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors';
+                    if (typeof turno === 'object' && Object.keys(turno).length > 0) {
+                        const horaFin = turno.inicio + (turno.descanso !== undefined ? 9 : 8);
+                        const colorClass = getShiftColor(turno.inicio, horaFin, true);
+                        cellContent = `<div class="p-2 rounded-md ${colorClass} text-white text-xs font-semibold flex items-center justify-center gap-2">
+                            <span>${turno.inicio.toString().padStart(2, '0')}:00 - ${horaFin.toString().padStart(2, '0')}:00</span>
+                            ${turno.descanso ? `<span class="opacity-80 border-l border-white/40 pl-2">D: ${turno.descanso}:00</span>` : ''}
+                        </div>`;
+                    } else {
+                        cellContent = `<div class="p-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 text-center text-xs font-semibold">Libre</div>`;
+                    }
+                    tableHTML += `<td class="p-1 border border-gray-300 dark:border-gray-700 ${cellClass}" data-action="open-weekly-edit" data-asesor-id="${asesor.id}" data-day="${dia}">${cellContent}</td>`;
+                });
+                tableHTML += `</tr>`;
+            });
+            tableHTML += `</tbody></table>`;
+            weeklyViewContainer.innerHTML = tableHTML;
+        }
+        
+        function getShiftColor(startHour, endHour, forText = false) {
+            if (startHour <= 7) return forText ? 'bg-green-600' : 'bg-green-500';
+            if (endHour >= 22) return forText ? 'bg-purple-600' : 'bg-purple-500';
+            return forText ? 'bg-sky-600' : 'bg-sky-500';
+        }
+        
+        function updateTotalsAndAlerts() {
+            if(estado.currentView !== 'daily') {
+                globalAlertsContainer.innerHTML = '';
+                return;
+            }
+            const hourlyTotals = calculateHourlyTotals(estado.currentDay);
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            let deficitCount = 0;
+            let noCoverageCount = 0;
+
+            let totalsHTML = `
+                <div class="p-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 border-t border-r border-gray-300 dark:border-gray-600 flex items-center" style="grid-column: span 2;">Total Conectados</div>
+                ${horasDelDia.map(hora => {
+                    const total = hourlyTotals[hora] || 0;
+                    const demandaRequerida = CUBRIMIENTO_REQUERIDO[estado.currentDay]?.[hora] || 0;
+                    if (total === 0 && demandaRequerida > 0) noCoverageCount++;
+                    else if (total < demandaRequerida) deficitCount++;
+                    const isGap = total < demandaRequerida && demandaRequerida > 0;
+                    return `<div class="p-2 text-xs text-center font-bold ${isGap ? 'gap-alert-cell' : 'bg-gray-100 dark:bg-gray-700/50'} border-t border-r border-gray-300 dark:border-gray-600 flex items-center justify-center">${total}</div>`;
+                }).join('')}`;
+            
+            const totalsRow = document.getElementById('totals-row');
+            if (totalsRow) totalsRow.innerHTML = totalsHTML;
+
+            renderDemandRow();
+            renderDifferenceRow();
+
+            let alertsHTML = '';
+            if (noCoverageCount > 0) {
+                alertsHTML += `<div class="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 text-red-700 dark:text-red-300 p-2 text-sm rounded-md shadow-sm" role="alert"><p class="font-bold">¡Alerta Crítica!</p><p>Hay ${noCoverageCount} hora(s) sin cobertura.</p></div>`;
+            }
+            if (deficitCount > 0) {
+                alertsHTML += `<div class="bg-yellow-100 dark:bg-yellow-900/30 border-l-4 border-yellow-500 text-yellow-700 dark:text-yellow-300 p-2 text-sm rounded-md shadow-sm" role="alert"><p class="font-bold">Alerta de Déficit</p><p>Hay ${deficitCount} hora(s) con déficit.</p></div>`;
+            }
+            globalAlertsContainer.innerHTML = alertsHTML;
+        }
+
+        function renderDemandRow() {
+            const demandRow = document.getElementById('demand-row');
+            if(!demandRow) return;
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            let demandHTML = `
+                <div class="p-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-blue-100 dark:bg-blue-900/40 border-t border-r border-gray-300 dark:border-gray-600 flex items-center" style="grid-column: span 2;">Demanda</div>
+                ${horasDelDia.map(hora => {
+                    const demandaRequerida = CUBRIMIENTO_REQUERIDO[estado.currentDay]?.[hora] || 0;
+                    return `<div class="p-2 text-xs text-center font-bold bg-blue-50 dark:bg-blue-900/20 border-t border-r border-gray-300 dark:border-gray-600 flex items-center justify-center">${demandaRequerida}</div>`;
+                }).join('')}`;
+            demandRow.innerHTML = demandHTML;
+        }
+
+        function renderDifferenceRow() {
+            const differenceRow = document.getElementById('difference-row');
+            if(!differenceRow) return;
+            const hourlyTotals = calculateHourlyTotals(estado.currentDay);
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            let differenceHTML = `
+                <div class="p-2 text-xs font-bold text-gray-600 dark:text-gray-300 bg-yellow-100 dark:bg-yellow-900/40 border-t border-r border-gray-300 dark:border-gray-600 flex items-center" style="grid-column: span 2;">Diferencia</div>
+                ${horasDelDia.map(hora => {
+                    const total = hourlyTotals[hora] || 0;
+                    const demandaRequerida = CUBRIMIENTO_REQUERIDO[estado.currentDay]?.[hora] || 0;
+                    const difference = total - demandaRequerida;
+                    const colorClass = difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400';
+                    const sign = difference > 0 ? '+' : '';
+                    return `<div class="p-2 text-xs text-center font-bold ${colorClass} bg-yellow-50 dark:bg-yellow-900/20 border-t border-r border-gray-300 dark:border-gray-600 flex items-center justify-center">${sign}${difference}</div>`;
+                }).join('')}`;
+            differenceRow.innerHTML = differenceHTML;
+        }
+        
+        function updateAdvisorRowUI(asesorId) {
+            const asesor = asesores.find(a => a.id === asesorId);
+            if (!asesor) return;
+            const advisorRow = document.querySelector(`.advisor-row[data-asesor-id="${asesor.id}"]`);
+            if (!advisorRow) return;
+            advisorRow.querySelectorAll('.shift-block-wrapper, .day-off-block').forEach(el => el.remove());
+            const statusCell = advisorRow.querySelector('.status-indicator-cell');
+            const isWorking = typeof asesor.horario[estado.currentDay] === 'object' && Object.keys(asesor.horario[estado.currentDay]).length > 0;
+            statusCell.innerHTML = `<div class="w-3.5 h-3.5 rounded-full cursor-pointer transition-transform duration-200 hover:scale-125 ${isWorking ? 'bg-green-500' : 'bg-red-500'}" title="${isWorking ? 'Trabajando' : 'Día Libre'}"></div>`;
+            if (isWorking) { createShiftBlock(asesor, advisorRow); } else { createDayOffBlock(asesor, advisorRow); }
+        }
+        
+        function renderAllShiftBlocks() {
+            document.querySelectorAll('.shift-block-wrapper, .day-off-block').forEach(el => el.remove());
+            asesores.forEach(asesor => updateAdvisorRowUI(asesor.id));
+            const firstCell = document.querySelector('.advisor-row > div:nth-child(3)');
+            if (firstCell) estado.dragInfo.cellWidth = firstCell.offsetWidth;
+        }
+
+        function createShiftBlock(asesor, advisorRow) {
+            const turno = asesor.horario[estado.currentDay];
+            if(!turno || typeof turno !== 'object' || !turno.hasOwnProperty('inicio')) return;
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            const { inicio, descanso } = turno;
+            const tieneDescanso = descanso !== undefined;
+            const duracionTotal = tieneDescanso ? 9 : 8;
+            const horaFin = inicio + duracionTotal;
+            if (inicio < horasDelDia[0] || horaFin > (horasDelDia[horasDelDia.length - 1] + 1)) return;
+            const firstHourCell = advisorRow.querySelector('div:nth-child(3)');
+            if (!firstHourCell) return;
+            const gridContentStart = firstHourCell.offsetLeft;
+            const gridWidth = advisorRow.offsetWidth - gridContentStart;
+            const startCol = inicio - horasDelDia[0];
+            const leftPosition = `calc( (${gridWidth}px / ${horasDelDia.length}) * ${startCol} + ${gridContentStart}px )`;
+            const blockWidth = `calc( (${gridWidth}px / ${horasDelDia.length}) * ${duracionTotal} )`;
+            const wrapper = document.createElement('div');
+            wrapper.className = 'shift-block-wrapper absolute top-0 h-full py-0.5 px-1 z-10';
+            wrapper.style.left = leftPosition;
+            wrapper.style.width = blockWidth;
+            const block = document.createElement('div');
+            block.dataset.asesorId = asesor.id;
+            const colorClass = getShiftColor(inicio, horaFin, false);
+            block.className = `shift-block relative h-full w-full ${colorClass} rounded shadow-sm cursor-grab flex items-center justify-center text-white font-medium text-[10px] border border-black/20 overflow-hidden`;
+            
+            block.innerHTML = `
+                <div class="flex justify-between items-center w-full h-full px-1.5">
+                    <span class="font-bold">${inicio.toString().padStart(2, '0')}:00</span>
+                    <span class="font-bold">${horaFin.toString().padStart(2, '0')}:00</span>
+                </div>`;
+
+            if (tieneDescanso) {
+                const descansoDiv = document.createElement('div');
+                const descansoLeftPercent = (descanso - inicio) * (100 / duracionTotal);
+                descansoDiv.className = 'break-block absolute top-0 bottom-0 my-auto h-full bg-white/90 dark:bg-gray-900/70 border-x-2 border-dashed border-sky-700 dark:border-sky-400 text-sky-800 dark:text-sky-300 flex items-center justify-center font-semibold text-[9px]';
+                descansoDiv.style.left = `${descansoLeftPercent}%`;
+                descansoDiv.style.width = `${100 / duracionTotal}%`;
+                descansoDiv.textContent = 'DESC.';
+                descansoDiv.dataset.asesorId = asesor.id;
+                block.appendChild(descansoDiv);
+                descansoDiv.addEventListener('mousedown', onBreakDragStart);
+            }
+            wrapper.appendChild(block);
+            advisorRow.appendChild(wrapper);
+            block.addEventListener('mousedown', onShiftDragStart);
+        }
+        
+        function createDayOffBlock(asesor, advisorRow) {
+            const firstHourCell = advisorRow.querySelector('div:nth-child(3)');
+            if (!firstHourCell) return;
+            const gridContentStart = firstHourCell.offsetLeft;
+            const blockWidth = `calc(100% - ${gridContentStart}px)`;
+            const dayOffBlock = document.createElement('div');
+            dayOffBlock.className = 'day-off-block absolute top-0 h-full py-0.5 px-1';
+            dayOffBlock.style.left = `${gridContentStart}px`;
+            dayOffBlock.style.width = blockWidth;
+            dayOffBlock.innerHTML = `<div class="w-full h-full bg-gray-200 dark:bg-gray-700/50 rounded flex items-center justify-center text-gray-500 dark:text-gray-400 font-semibold text-xs">DÍA LIBRE</div>`;
+            advisorRow.appendChild(dayOffBlock);
+        }
+
+        function renderDaySelector() {
+            daySelector.innerHTML = '';
+            DIAS_SEMANA.forEach(dia => {
+                const li = document.createElement('li');
+                const isActive = dia === estado.currentDay;
+                li.innerHTML = `<button data-day="${dia}" class="day-btn w-full text-left p-2 text-sm rounded-lg transition-all duration-200 ${isActive ? 'bg-sky-600 text-white font-bold shadow-md' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}">${dia.charAt(0) + dia.slice(1).toLowerCase()}</button>`;
+                daySelector.appendChild(li);
+            });
+        }
+
+        function renderAdvisorStatusSummary() {
+            let conectados = 0;
+            asesores.forEach(asesor => {
+                if (typeof asesor.horario[estado.currentDay] === 'object' && Object.keys(asesor.horario[estado.currentDay]).length > 0) conectados++;
+            });
+            statusSummaryContainer.innerHTML = `<div class="bg-white dark:bg-gray-800 p-3 h-full rounded-lg shadow-md border border-gray-200 dark:border-gray-700"><h3 class="font-bold text-md mb-2 text-gray-700 dark:text-gray-200">Estado del día</h3><div class="space-y-1 text-sm"><div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-400">Total:</span><span class="font-bold text-lg text-gray-800 dark:text-gray-100">${asesores.length}</span></div><div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-400">Conectados:</span><span class="font-bold text-lg text-green-600">${conectados}</span></div><div class="flex justify-between items-center"><span class="font-medium text-gray-600 dark:text-gray-400">Libres:</span><span class="font-bold text-lg text-red-500">${asesores.length - conectados}</span></div></div></div>`;
+        }
+
+        function renderWeeklyStatusSummary() {
+            let html = '<h3 class="font-bold text-lg mb-3 text-gray-700 dark:text-gray-200">Estado de la Semana</h3>';
+            html += '<div class="space-y-2 text-sm">';
+            DIAS_SEMANA.forEach(dia => {
+                let conectados = asesores.filter(a => typeof a.horario[dia] === 'object' && Object.keys(a.horario[dia]).length > 0).length;
+                const libres = asesores.length - conectados;
+                html += `
+                    <div class="flex justify-between items-center text-xs pb-1 border-b border-gray-100 dark:border-gray-700">
+                        <span class="font-bold w-2/5">${dia.charAt(0) + dia.slice(1).toLowerCase()}</span>
+                        <div class="flex justify-end items-center w-3/5 text-right">
+                            <span class="text-green-600 dark:text-green-400 mr-2">Conectados: <span class="font-bold">${conectados}</span></span>
+                            <span class="text-red-500 dark:text-red-400">Libres: <span class="font-bold">${libres}</span></span>
+                        </div>
+                    </div>`;
+            });
+            html += '</div>';
+            weeklyStatusSummaryContainer.innerHTML = html;
+        }
+
+        function renderAdvisorScheduleSummary() {
+            const table = document.createElement('table');
+            table.className = 'w-full text-sm text-left text-gray-500 dark:text-gray-400';
+            const dayHeaders = DIAS_SEMANA.map(d => d.slice(0, 3));
+            const validationHeaders = ['Horas Lab.', 'Días Lab.', 'Días Lib.'];
+            const allHeaders = ['Asesor', ...dayHeaders, ...validationHeaders];
+            let tableHTML = `<thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50"><tr>`;
+            allHeaders.forEach((text, index) => {
+                const thClass = `py-3 px-4 text-center ${index === 0 ? 'rounded-l-lg text-left' : ''} ${index === allHeaders.length - 1 ? 'rounded-r-lg' : ''}`;
+                tableHTML += `<th scope="col" class="${thClass}">${text}</th>`;
+            });
+            tableHTML += `</tr></thead><tbody>`;
+            asesores.forEach((asesor, index) => {
+                const rowColor = 'dark:bg-gray-800';
+                tableHTML += `<tr class="${rowColor} border-b dark:border-gray-700">`;
+                tableHTML += `<td class="py-3 px-4 font-semibold text-gray-900 dark:text-white whitespace-nowrap">${asesor.nombre}</td>`;
+                let horas = 0, diasLaborales = 0, diasLibres = 0;
+                DIAS_SEMANA.forEach(dia => {
+                    const turno = asesor.horario[dia];
+                    if (typeof turno === 'object' && turno !== null && Object.keys(turno).length > 0) {
+                        const duracionTotal = turno.descanso !== undefined ? 9 : 8;
+                        const horaFin = turno.inicio + duracionTotal;
+                        tableHTML += `<td class="py-3 px-4 text-center text-xs font-semibold">${turno.inicio.toString().padStart(2, '0')}-${horaFin.toString().padStart(2, '0')}</td>`;
+                        horas += 8; diasLaborales++;
+                    } else {
+                        tableHTML += `<td class="py-3 px-4 text-center text-xs text-gray-500 dark:text-gray-400">Libre</td>`;
+                        diasLibres++;
+                    }
+                });
+                tableHTML += `<td class="py-3 px-4 text-center text-xs font-bold text-gray-700 dark:text-gray-200">${horas}</td>`;
+                tableHTML += `<td class="py-3 px-4 text-center text-xs font-bold text-gray-700 dark:text-gray-200">${diasLaborales}</td>`;
+                tableHTML += `<td class="py-3 px-4 text-center text-xs font-bold text-gray-700 dark:text-gray-200">${diasLibres}</td>`;
+                tableHTML += `</tr>`;
+            });
+            tableHTML += `</tbody>`;
+            table.innerHTML = tableHTML;
+            advisorScheduleSummaryContainer.innerHTML = '';
+            advisorScheduleSummaryContainer.appendChild(table);
+        }
+        
+        function renderDemandTable() {
+            const table = document.createElement('table');
+            table.className = 'w-full text-sm text-left text-gray-500 dark:text-gray-400';
+            const allHours = Array.from({length: 15}, (_, i) => i + 7);
+            let headerHTML = `<thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50"><tr>`;
+            headerHTML += `<th scope="col" class="py-2 px-3 rounded-l-lg">Día</th>`;
+            allHours.forEach(h => { headerHTML += `<th scope="col" class="py-2 px-2 text-center">${h}:00</th>`; });
+            headerHTML += `<th scope="col" class="py-2 px-3 text-center font-bold">Total</th>`;
+            headerHTML += `<th scope="col" class="py-2 px-3 text-center font-bold rounded-r-lg">Libres</th></tr></thead>`;
+            let bodyHTML = `<tbody>`;
+            DIAS_SEMANA.forEach((dia, index) => {
+                const rowColor = index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50';
+                const activeClass = dia === estado.currentDay ? 'demand-active-row' : '';
+                bodyHTML += `<tr class="${rowColor} border-b dark:border-gray-700 ${activeClass}">`;
+                bodyHTML += `<td class="py-2 px-3 font-medium text-gray-900 dark:text-gray-200 whitespace-nowrap">${dia.charAt(0) + dia.slice(1).toLowerCase()}</td>`;
+                const demandaDia = CUBRIMIENTO_REQUERIDO[dia] || {};
+                let maxDemandaDia = 0;
+                allHours.forEach(h => {
+                    const demanda = demandaDia[h] || 0;
+                    maxDemandaDia = Math.max(maxDemandaDia, demanda);
+                    const editableClass = estado.isDemandEditMode ? 'demand-cell-editable' : '';
+                    bodyHTML += `<td class="py-2 px-2 text-center ${editableClass}" contenteditable="${estado.isDemandEditMode}" data-day="${dia}" data-hour="${h}">${demanda}</td>`;
+                });
+                bodyHTML += `<td class="py-2 px-3 font-bold text-center bg-gray-100 dark:bg-gray-700">${maxDemandaDia}</td>`;
+                const asesoresLibres = Math.max(0, asesores.length - maxDemandaDia);
+                bodyHTML += `<td class="py-2 px-3 font-bold text-center bg-blue-100 dark:bg-blue-900/50">${asesoresLibres}</td></tr>`;
+            });
+            bodyHTML += `</tbody>`;
+            table.innerHTML = headerHTML + bodyHTML;
+            demandTableContainer.innerHTML = '';
+            demandTableContainer.appendChild(table);
+        }
+
+        function onShiftDragStart(e) { e.preventDefault(); setupDrag(e, e.currentTarget, 'shift'); }
+        function onBreakDragStart(e) { e.preventDefault(); e.stopPropagation(); setupDrag(e, e.currentTarget, 'break'); }
+        
+        function setupDrag(e, target, type) {
+            const asesorId = parseInt(target.dataset.asesorId);
+            const asesor = asesores.find(a => a.id === asesorId);
+            const turno = asesor.horario[estado.currentDay];
+            if(!asesor || typeof turno !== 'object' || !turno.hasOwnProperty('inicio')) return;
+            estado.dragInfo = {
+                isDragging: true, dragType: type, element: target, asesorId: asesorId, initialX: e.clientX,
+                cellWidth: estado.dragInfo.cellWidth || dailyViewContainer.querySelector('.advisor-row > div:nth-child(3)').offsetWidth,
+                initialStartHour: turno.inicio, initialBreakHour: turno.descanso,
+            };
+            target.classList.add('dragging'); document.body.classList.add('noselect');
+            document.addEventListener('mousemove', onDragMove); document.addEventListener('mouseup', onDragEnd);
+        }
+        function onDragMove(e) {
+            if (!estado.dragInfo.isDragging) return;
+            const deltaX = e.clientX - estado.dragInfo.initialX;
+            let elementToMove = estado.dragInfo.dragType === 'shift' ? estado.dragInfo.element.parentElement : estado.dragInfo.element;
+            elementToMove.style.transform = `translateX(${deltaX}px)`;
+        }
+        function onDragEnd(e) {
+            if (!estado.dragInfo.isDragging) return;
+            if (estado.dragInfo.dragType === 'shift') { handleShiftDragEnd(e); } 
+            else if (estado.dragInfo.dragType === 'break') { handleBreakDragEnd(e); }
+            const { element, dragType } = estado.dragInfo;
+            element.classList.remove('dragging'); document.body.classList.remove('noselect');
+            let elementToReset = dragType === 'shift' ? element.parentElement : element;
+            elementToReset.style.transform = '';
+            document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd);
+            estado.dragInfo = {};
+            updateAllSummariesAndState();
+        }
+        
+        function handleShiftDragEnd(e) {
+            const { initialX, initialStartHour, cellWidth, asesorId } = estado.dragInfo;
+            const deltaX = e.clientX - initialX;
+            const movedCells = Math.round(deltaX / cellWidth);
+            const newStartHour = initialStartHour + movedCells;
+            const asesor = asesores.find(a => a.id === asesorId);
+            if (!asesor) return;
+            const turno = asesor.horario[estado.currentDay];
+            const horasDelDia = getHorasDelDia(estado.currentDay);
+            const shiftTemplate = TURNOS_POSIBLES.find(t => t.inicio === newStartHour && t.descanso) || TURNOS_POSIBLES.find(t => t.inicio === newStartHour);
+            if (shiftTemplate) {
+                const duracion = shiftTemplate.descanso !== undefined ? 9 : 8;
+                const horaFin = shiftTemplate.inicio + duracion;
+                if (shiftTemplate.inicio >= horasDelDia[0] && horaFin <= (horasDelDia[horasDelDia.length - 1] + 1)) {
+                    turno.inicio = shiftTemplate.inicio;
+                    turno.descanso = shiftTemplate.descanso;
+                }
+            }
+        }
+
+        function handleBreakDragEnd(e) {
+            const { initialX, initialBreakHour, cellWidth, asesorId, initialStartHour } = estado.dragInfo;
+            const deltaX = e.clientX - initialX;
+            const movedCells = Math.round(deltaX / cellWidth);
+            let newBreakHour = initialBreakHour + movedCells;
+            const duracion = 9;
+            newBreakHour = Math.max(initialStartHour + 1, Math.min(newBreakHour, initialStartHour + duracion - 2));
+            newBreakHour = Math.max(12, Math.min(newBreakHour, 15)); 
+            const asesor = asesores.find(a => a.id === asesorId);
+            if (asesor && asesor.horario[estado.currentDay]) { asesor.horario[estado.currentDay].descanso = newBreakHour; }
+        }
+
+        function getSavedSchedules() { return JSON.parse(localStorage.getItem('contactCenter_savedVersions')) || {}; }
+        
+        function saveCurrentSchedule(name) {
+            const schedules = getSavedSchedules();
+            schedules[name] = JSON.parse(JSON.stringify(asesores));
+            localStorage.setItem('contactCenter_savedVersions', JSON.stringify(schedules));
+            renderSavedSchedulesList();
+            showToast('¡Horario guardado con éxito!');
+        }
+        
+        function loadSchedule(name) {
+            const schedules = getSavedSchedules();
+            if (schedules[name]) {
+                asesores = JSON.parse(JSON.stringify(schedules[name]));
+                updateAllSummariesAndState();
+                showToast(`Horario "${name}" cargado.`, 'info');
+            }
+        }
+
+        function deleteSavedSchedule(name) {
+            const schedules = getSavedSchedules();
+            delete schedules[name];
+            localStorage.setItem('contactCenter_savedVersions', JSON.stringify(schedules));
+            renderSavedSchedulesList();
+            showToast(`Horario "${name}" eliminado.`, 'info');
+        }
+        
+        function renderSavedSchedulesList() {
+            const list = document.getElementById('saved-schedules-list');
+            list.innerHTML = '';
+            const schedules = getSavedSchedules();
+            if (Object.keys(schedules).length === 0) {
+                list.innerHTML = `<p class="text-xs text-gray-500 dark:text-gray-400 text-center">No hay horarios guardados.</p>`;
+                return;
+            }
+            for (const name in schedules) {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 p-2 rounded-lg';
+                item.innerHTML = `
+                    <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate pr-2">${name}</span>
+                    <div class="flex items-center space-x-1 flex-shrink-0">
+                        <button data-action="load-schedule" data-name="${name}" class="px-2 py-1 text-xs bg-blue-500 hover:bg-blue-600 text-white rounded" title="Cargar">Cargar</button>
+                        <button data-action="delete-schedule" data-name="${name}" class="px-2 py-1 text-xs bg-red-500 hover:bg-red-600 text-white rounded" title="Borrar">Borrar</button>
+                    </div>`;
+                list.appendChild(item);
+            }
+        }
+
+        function saveLastState() { try { localStorage.setItem('contactCenter_lastState', JSON.stringify(asesores)); } catch (error) { console.error("Error saving state:", error); } }
+        
+        function loadLastState() {
+            try {
+                const savedState = localStorage.getItem('contactCenter_lastState');
+                asesores = savedState ? JSON.parse(savedState) : generateInitialSchedules();
+            } catch (error) { console.error("Error loading state:", error); asesores = generateInitialSchedules(); }
+        }
+
+        function addNewAdvisor() {
+            const newId = asesores.length > 0 ? Math.max(...asesores.map(a => a.id)) + 1 : Date.now();
+            asesores.push({ id: newId, nombre: "Nuevo Asesor", horario: Object.fromEntries(DIAS_SEMANA.map(dia => [dia, 'LIBRE'])) });
+            updateAllSummariesAndState();
+            showToast('Nuevo asesor añadido.', 'info');
+        }
+
+        function removeAdvisor(asesorId) { 
+            const advisorName = asesores.find(a => a.id === asesorId)?.nombre || 'El asesor';
+            asesores = asesores.filter(a => a.id !== asesorId); 
+            updateAllSummariesAndState();
+            showToast(`${advisorName} ha sido eliminado.`, 'error');
+        }
+
+        function resetSchedules() {
+            localStorage.removeItem('contactCenter_lastState');
+            localStorage.removeItem('contactCenter_savedVersions');
+            localStorage.removeItem('contactCenter_demandData'); 
+            loadDemandData();
+            asesores = generateInitialSchedules();
+            lastGuidedGenConfig = null;
+            editGuidedGenButton.disabled = true;
+            updateAllSummariesAndState();
+            renderSavedSchedulesList();
+            showToast('La aplicación ha sido restaurada a sus valores por defecto.', 'success');
+        }
+
+        function randomizeConsistentSchedules() {
+            let tempAdvisors = JSON.parse(JSON.stringify(asesores));
+            const shuffledShifts = [...TURNOS_POSIBLES].sort(() => 0.5 - Math.random());
+            const shuffledGruposLibres = [...GRUPOS_LIBRES].sort(() => 0.5 - Math.random());
+            
+            tempAdvisors.forEach((asesor, index) => {
+                const libres = shuffledGruposLibres[index % shuffledGruposLibres.length];
+                const assignedShift = shuffledShifts[index % shuffledShifts.length];
+                DIAS_SEMANA.forEach(dia => {
+                    asesor.horario[dia] = libres.includes(dia) || !isShiftValidForDay(assignedShift, dia)
+                        ? 'LIBRE' 
+                        : { inicio: assignedShift.inicio, descanso: assignedShift.descanso };
+                });
+            });
+            asesores = optimizeCoverage(tempAdvisors);
+            updateAllSummariesAndState();
+            showToast('Se han generado nuevos horarios fijos.', 'info');
+        }
+
+        function shuffleAdvisorNames() {
+            if (asesores.length < 2) {
+                showToast('No hay suficientes asesores para mezclar.', 'info');
+                return;
+            }
+            const names = asesores.map(a => a.nombre);
+            for (let i = names.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [names[i], names[j]] = [names[j], names[i]];
+            }
+            asesores.forEach((asesor, index) => {
+                asesor.nombre = names[index];
+            });
+            updateAllSummariesAndState();
+            showToast('Nombres de asesores mezclados aleatoriamente.', 'success');
+        }
+
+        function exportToCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            const headers = ["Asesor", ...DIAS_SEMANA];
+            csvContent += headers.join(",") + "\r\n";
+            asesores.forEach(asesor => {
+                const row = [`"${asesor.nombre}"`];
+                DIAS_SEMANA.forEach(dia => {
+                    const turno = asesor.horario[dia];
+                    if(typeof turno === 'object' && turno !== null && Object.keys(turno).length > 0){
+                        const fin = turno.inicio + (turno.descanso !== undefined ? 9 : 8);
+                        row.push(`"${turno.inicio.toString().padStart(2, '0')}:00-${fin.toString().padStart(2, '0')}:00"`);
+                    } else { row.push("Libre"); }
+                });
+                csvContent += row.join(",") + "\r\n";
+            });
+            const link = document.createElement("a");
+            link.href = encodeURI(csvContent);
+            link.download = "horarios_contact_center.csv";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function exportToPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ orientation: 'landscape' });
+            doc.text("Resumen de Horarios y Carga Laboral - Contact Center", 14, 15);
+            doc.setFontSize(10);
+            doc.text(`Fecha de exportación: ${new Date().toLocaleDateString()}`, 14, 20);
+            const dayHeaders = DIAS_SEMANA.map(d => d.slice(0, 3));
+            const validationHeaders = ['Horas', 'Días Lab', 'Días Lib'];
+            const allHeaders = [['Asesor', ...dayHeaders, ...validationHeaders]];
+            const body = asesores.map(asesor => {
+                const row = [asesor.nombre];
+                let horas = 0, diasLaborales = 0, diasLibres = 0;
+                DIAS_SEMANA.forEach(dia => {
+                    const turno = asesor.horario[dia];
+                    if (typeof turno === 'object' && turno !== null && Object.keys(turno).length > 0) {
+                        const fin = turno.inicio + (turno.descanso !== undefined ? 9 : 8);
+                        row.push(`${String(turno.inicio).padStart(2,'0')}-${String(fin).padStart(2,'0')}`);
+                        horas += 8; diasLaborales++;
+                    } else { row.push('Libre'); diasLibres++; }
+                });
+                row.push(horas, diasLaborales, diasLibres);
+                return row;
+            });
+            doc.autoTable({ head: allHeaders, body: body, startY: 25, theme: 'grid', headStyles: { fillColor: [41, 128, 185], halign: 'center' }, columnStyles: { 0: { halign: 'left', cellWidth: 40 } } });
+            doc.save('reporte_horarios.pdf');
+        }
+
+        function openWeeklyEditModal(asesorId, dia) {
+            const asesor = asesores.find(a => a.id === asesorId);
+            const turno = asesor.horario[dia];
+            const modal = document.getElementById('weekly-edit-modal');
+            const toggleBtn = modal.querySelector('#work-status-toggle');
+            const shiftDetails = modal.querySelector('#shift-details');
+            const startSelect = modal.querySelector('#start-time-select');
+            const breakSelect = modal.querySelector('#break-time-select');
+
+            modal.querySelector('#modal-title').textContent = `Editar: ${asesor.nombre} - ${dia.charAt(0) + dia.slice(1).toLowerCase()}`;
+            modal.dataset.asesorId = asesorId;
+            modal.dataset.day = dia;
+
+            const isWorking = typeof turno === 'object' && Object.keys(turno).length > 0;
+            toggleBtn.textContent = isWorking ? 'Día Laboral' : 'Día Libre';
+            toggleBtn.className = `px-4 py-2 rounded-lg font-semibold text-sm ${isWorking ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+            shiftDetails.classList.toggle('hidden', !isWorking);
+
+            if (isWorking) {
+                startSelect.innerHTML = [...new Set(TURNOS_POSIBLES.map(t => t.inicio))].sort((a, b) => a - b)
+                    .map(h => `<option value="${h}">${h}:00</option>`).join('');
+                startSelect.value = turno.inicio;
+                
+                breakSelect.innerHTML = '<option value="">Sin Descanso</option>' + [12, 13, 14, 15, 16, 17]
+                    .map(h => `<option value="${h}">${h}:00</option>`).join('');
+                breakSelect.value = turno.descanso || "";
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function initGuidedGen(editMode = false) {
+            const configToUse = editMode && lastGuidedGenConfig ? lastGuidedGenConfig : null;
+            guidedGenConfig = configToUse ? JSON.parse(JSON.stringify(configToUse)) : { step: 1, daysOff: {}, weeklyShifts: {} };
+
+            const daysOffContainer = document.getElementById('days-off-config-container');
+            daysOffContainer.innerHTML = '';
+            document.getElementById('days-off-total-count').textContent = asesores.length;
+            
+            GRUPOS_LIBRES.forEach((group, index) => {
+                const label = group.map(d => d.slice(0, 3)).join(' - ');
+                const value = configToUse ? configToUse.daysOff[index] || 0 : 0;
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg';
+                div.innerHTML = `<label for="dias-libres-${index}" class="font-medium text-sm">${label}</label><input type="number" id="dias-libres-${index}" data-group-index="${index}" class="guided-days-off-input w-20 text-center border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md shadow-sm p-1" value="${value}" min="0">`;
+                daysOffContainer.appendChild(div);
+            });
+            updateDaysOffCounter();
+
+            const allWeekContainer = document.getElementById('shifts-config-container-allweek');
+            const weekdayContainer = document.getElementById('shifts-config-container-weekday');
+            allWeekContainer.innerHTML = '';
+            weekdayContainer.innerHTML = '';
+            document.getElementById('shifts-total-count').textContent = asesores.length;
+
+            TURNOS_POSIBLES.forEach(turno => {
+                const container = WEEKDAY_ONLY_SHIFT_IDS.includes(turno.id) ? weekdayContainer : allWeekContainer;
+                const value = configToUse ? configToUse.weeklyShifts[turno.id] || 0 : 0;
+                const div = document.createElement('div');
+                div.className = 'flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg';
+                div.innerHTML = `<label class="font-medium text-xs">${turno.label}</label><input type="number" data-turno-id="${turno.id}" class="guided-shift-input w-16 text-center border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-md shadow-sm p-1" value="${value}" min="0">`;
+                container.appendChild(div);
+            });
+            updateWeeklyShiftsCounter();
+
+            document.getElementById('guided-gen-step-1').classList.remove('hidden');
+            document.getElementById('guided-gen-step-2').classList.add('hidden');
+            document.getElementById('guided-gen-back-btn').classList.add('hidden');
+            document.getElementById('guided-gen-finish-btn').classList.add('hidden');
+            document.getElementById('guided-gen-next-btn').classList.remove('hidden');
+            guidedGenAlert.classList.add('hidden');
+            guidedGenModal.classList.remove('hidden');
+        }
+
+        function updateDaysOffCounter() {
+            const inputs = document.querySelectorAll('.guided-days-off-input');
+            let totalAssigned = 0;
+            inputs.forEach(input => {
+                const value = parseInt(input.value) || 0;
+                if (value < 0) input.value = 0;
+                totalAssigned += parseInt(input.value) || 0;
+                guidedGenConfig.daysOff[input.dataset.groupIndex] = parseInt(input.value) || 0;
+            });
+            const assignedEl = document.getElementById('days-off-assigned-count');
+            assignedEl.textContent = totalAssigned;
+            assignedEl.classList.toggle('text-red-500', totalAssigned !== asesores.length);
+            document.getElementById('guided-gen-next-btn').disabled = totalAssigned !== asesores.length;
+        }
+
+        function updateWeeklyShiftsCounter() {
+            const inputs = document.querySelectorAll('.guided-shift-input');
+            let totalAssigned = 0;
+            inputs.forEach(input => {
+                const value = parseInt(input.value) || 0;
+                if (value < 0) input.value = 0;
+                totalAssigned += parseInt(input.value) || 0;
+                guidedGenConfig.weeklyShifts[input.dataset.turnoId] = parseInt(input.value) || 0;
+            });
+            const assignedEl = document.getElementById('shifts-assigned-count');
+            assignedEl.textContent = totalAssigned;
+            assignedEl.classList.toggle('text-red-500', totalAssigned !== asesores.length);
+            document.getElementById('guided-gen-finish-btn').disabled = totalAssigned !== asesores.length;
+        }
+
+        function fillRandomDaysOff() {
+            let remaining = asesores.length;
+            const inputs = document.querySelectorAll('.guided-days-off-input');
+            inputs.forEach(input => input.value = 0);
+
+            while (remaining > 0) {
+                const randomIndex = Math.floor(Math.random() * inputs.length);
+                inputs[randomIndex].value = parseInt(inputs[randomIndex].value) + 1;
+                remaining--;
+            }
+            updateDaysOffCounter();
+        }
+
+        function fillRandomShifts() {
+            const weekendOffCount = guidedGenConfig.daysOff[WEEKEND_OFF_GROUP_INDEX] || 0;
+            const allShiftInputs = document.querySelectorAll('.guided-shift-input');
+            allShiftInputs.forEach(input => input.value = 0);
+            
+            let remainingAdvisors = asesores.length;
+            while(remainingAdvisors > 0) {
+                 const randomIndex = Math.floor(Math.random() * allShiftInputs.length);
+                 allShiftInputs[randomIndex].value = parseInt(allShiftInputs[randomIndex].value) + 1;
+                 remainingAdvisors--;
+            }
+
+            const weekdayOnlyShiftsCount = WEEKDAY_ONLY_SHIFT_IDS.reduce((acc, id) => acc + (parseInt(document.querySelector(`input[data-turno-id="${id}"]`).value) || 0), 0);
+            if (weekdayOnlyShiftsCount > weekendOffCount) {
+                 fillRandomShifts();
+                 return;
+            }
+            
+            updateWeeklyShiftsCounter();
+        }
+
+
+        function generateGuidedSchedule() {
+            const daysOffTotal = Object.values(guidedGenConfig.daysOff).reduce((a, b) => a + b, 0);
+            const shiftsTotal = Object.values(guidedGenConfig.weeklyShifts).reduce((a, b) => a + b, 0);
+
+            if (daysOffTotal !== asesores.length || shiftsTotal !== asesores.length) {
+                guidedGenAlert.textContent = 'La configuración es incorrecta. Ambas asignaciones (días libres y turnos) deben sumar el total de asesores.';
+                guidedGenAlert.classList.remove('hidden');
+                return;
+            }
+
+            const weekdayOnlyShiftsCount = WEEKDAY_ONLY_SHIFT_IDS.reduce((acc, id) => acc + (guidedGenConfig.weeklyShifts[id] || 0), 0);
+            const weekendOffCount = guidedGenConfig.daysOff[WEEKEND_OFF_GROUP_INDEX] || 0;
+
+            if (weekdayOnlyShiftsCount > weekendOffCount) {
+                 guidedGenAlert.textContent = `Error: Has asignado ${weekdayOnlyShiftsCount} asesores a turnos exclusivos de L-V, pero solo has asignado ${weekendOffCount} para librar Sáb-Dom. El número de turnos exclusivos no puede superar los libres de fin de semana.`;
+                 guidedGenAlert.classList.remove('hidden');
+                 return;
+            }
+            guidedGenAlert.classList.add('hidden');
+            
+            let tempAdvisors = JSON.parse(JSON.stringify(asesores));
+            let unassignedAdvisors = [...tempAdvisors].sort(() => 0.5 - Math.random());
+            
+            let weekdayOnlyShiftSlots = [];
+            WEEKDAY_ONLY_SHIFT_IDS.forEach(id => {
+                for(let i = 0; i < guidedGenConfig.weeklyShifts[id]; i++) { weekdayOnlyShiftSlots.push(TURNOS_POSIBLES.find(t=>t.id===id)); }
+            });
+
+            let allWeekShiftSlots = [];
+            Object.keys(guidedGenConfig.weeklyShifts).forEach(id_str => {
+                const id = parseInt(id_str);
+                if(!WEEKDAY_ONLY_SHIFT_IDS.includes(id)) {
+                    for(let i=0; i < guidedGenConfig.weeklyShifts[id]; i++) { allWeekShiftSlots.push(TURNOS_POSIBLES.find(t=>t.id===id)); }
+                }
+            });
+
+            let weekendOffSlots = [];
+            for (let i = 0; i < guidedGenConfig.daysOff[WEEKEND_OFF_GROUP_INDEX]; i++) { weekendOffSlots.push(GRUPOS_LIBRES[WEEKEND_OFF_GROUP_INDEX]); }
+            
+            let otherDayOffSlots = [];
+            Object.keys(guidedGenConfig.daysOff).forEach(groupIndex_str => {
+                const groupIndex = parseInt(groupIndex_str);
+                if (groupIndex !== WEEKEND_OFF_GROUP_INDEX) {
+                    for (let i=0; i < guidedGenConfig.daysOff[groupIndex]; i++) { otherDayOffSlots.push(GRUPOS_LIBRES[groupIndex]); }
+                }
+            });
+
+            weekdayOnlyShiftSlots.forEach(shift => {
+                const advisor = unassignedAdvisors.pop();
+                const dayOff = weekendOffSlots.pop();
+                const advisorInMainList = tempAdvisors.find(a => a.id === advisor.id);
+                DIAS_SEMANA.forEach(dia => {
+                    advisorInMainList.horario[dia] = dayOff.includes(dia) ? 'LIBRE' : {inicio: shift.inicio, descanso: shift.descanso};
+                });
+            });
+
+            const remainingDayOffSlots = [...weekendOffSlots, ...otherDayOffSlots].sort(() => 0.5 - Math.random());
+            allWeekShiftSlots.sort(() => 0.5 - Math.random());
+
+            unassignedAdvisors.forEach((advisor, index) => {
+                const dayOff = remainingDayOffSlots[index];
+                const shift = allWeekShiftSlots[index];
+                 const advisorInMainList = tempAdvisors.find(a => a.id === advisor.id);
+                 DIAS_SEMANA.forEach(dia => {
+                    advisorInMainList.horario[dia] = dayOff.includes(dia) ? 'LIBRE' : {inicio: shift.inicio, descanso: shift.descanso};
+                });
+            });
+
+            lastGuidedGenConfig = JSON.parse(JSON.stringify(guidedGenConfig));
+            editGuidedGenButton.disabled = false;
+            asesores = optimizeCoverage(tempAdvisors);
+            updateAllSummariesAndState();
+            guidedGenModal.classList.add('hidden');
+        }
+
+        function optimizeCoverage(advisorList) {
+            const minOpeningCoverage = 2;
+            const openingShiftTime = 7;
+            const openingShiftTemplate = TURNOS_POSIBLES.find(t => t.inicio === openingShiftTime);
+            if (!openingShiftTemplate) return advisorList;
+
+            const modifiedList = JSON.parse(JSON.stringify(advisorList));
+
+            DIAS_SEMANA.forEach(dia => {
+                const hourlyTotals = calculateHourlyTotals(dia, modifiedList);
+                const currentCoverage = hourlyTotals[openingShiftTime] || 0;
+                let gapsToFill = minOpeningCoverage - currentCoverage;
+
+                if (gapsToFill > 0) {
+                    const potentialReplacements = modifiedList
+                        .filter(a => typeof a.horario[dia] === 'object' && a.horario[dia].inicio > openingShiftTime)
+                        .sort((a, b) => a.horario[dia].inicio - b.horario[dia].inicio);
+
+                    for (let i = 0; i < gapsToFill && i < potentialReplacements.length; i++) {
+                        const advisorToMove = potentialReplacements[i];
+                        if (isShiftValidForDay(openingShiftTemplate, dia)) {
+                           advisorToMove.horario[dia] = { 
+                                inicio: openingShiftTemplate.inicio, 
+                                descanso: openingShiftTemplate.descanso 
+                            };
+                        }
+                    }
+                }
+            });
+            return modifiedList;
+        }
+
+        function initEventListeners() {
+            document.getElementById('daily-view-btn').addEventListener('click', () => { estado.currentView = 'daily'; document.getElementById('weekly-view-btn').classList.remove('view-btn-active'); document.getElementById('daily-view-btn').classList.add('view-btn-active'); renderActiveView(); });
+            document.getElementById('weekly-view-btn').addEventListener('click', () => { estado.currentView = 'weekly'; document.getElementById('daily-view-btn').classList.remove('view-btn-active'); document.getElementById('weekly-view-btn').classList.add('view-btn-active'); renderActiveView(); });
+            document.getElementById('add-advisor-button').addEventListener('click', addNewAdvisor);
+            document.getElementById('randomize-button').addEventListener('click', () => { 
+                let generated = randomizeSchedulesLogic(asesores);
+                asesores = optimizeCoverage(generated);
+                updateAllSummariesAndState();
+                showToast('Se han generado nuevos horarios aleatorios.', 'info');
+            });
+            document.getElementById('fixed-randomize-button').addEventListener('click', randomizeConsistentSchedules);
+            document.getElementById('guided-gen-button').addEventListener('click', () => initGuidedGen(false));
+            document.getElementById('edit-guided-gen-button').addEventListener('click', () => {
+                if(lastGuidedGenConfig) {
+                    initGuidedGen(true);
+                }
+            });
+            document.getElementById('save-button').addEventListener('click', () => document.getElementById('save-modal').classList.remove('hidden'));
+            document.getElementById('reset-button').addEventListener('click', () => document.getElementById('reset-modal').classList.remove('hidden'));
+            document.getElementById('export-csv-button').addEventListener('click', exportToCSV);
+            document.getElementById('export-pdf-button').addEventListener('click', exportToPDF);
+            document.getElementById('shuffle-names-button').addEventListener('click', shuffleAdvisorNames);
+            
+            const editDemandButton = document.getElementById('edit-demand-button');
+            editDemandButton.addEventListener('click', () => {
+                estado.isDemandEditMode = !estado.isDemandEditMode;
+                renderDemandTable();
+                editDemandButton.classList.toggle('bg-green-500', estado.isDemandEditMode);
+                editDemandButton.classList.toggle('hover:bg-green-600', estado.isDemandEditMode);
+                editDemandButton.querySelector('span').textContent = estado.isDemandEditMode ? 'Guardar Demanda' : 'Editar Demanda';
+
+                if (!estado.isDemandEditMode) {
+                    localStorage.setItem('contactCenter_demandData', JSON.stringify(CUBRIMIENTO_REQUERIDO));
+                    updateAllSummariesAndState();
+                    showToast('Demanda actualizada.', 'success');
+                }
+            });
+
+            document.getElementById('demand-table-container').addEventListener('input', (e) => {
+                const cell = e.target.closest('td[contenteditable="true"]');
+                if (cell) {
+                    const { day, hour } = cell.dataset;
+                    const newValue = parseInt(cell.textContent.trim()) || 0;
+                    if (CUBRIMIENTO_REQUERIDO[day]) CUBRIMIENTO_REQUERIDO[day][hour] = newValue;
+                }
+            });
+            
+            document.getElementById('day-selector').addEventListener('click', e => {
+                const dayButton = e.target.closest('.day-btn');
+                if (dayButton) {
+                    estado.currentDay = dayButton.dataset.day;
+                    renderDaySelector();
+                    updateAllSummariesAndState();
+                }
+            });
+
+            document.body.addEventListener('click', e => {
+                const actionTarget = e.target.closest('[data-action]');
+                if (!actionTarget) return;
+
+                const { action } = actionTarget.dataset;
+                const modal = actionTarget.closest('.fixed');
+                
+                if (action === 'cancel' && modal) {
+                    modal.classList.add('hidden');
+                    return;
+                }
+
+                const advisorRow = actionTarget.closest('.advisor-row');
+                if (advisorRow) { handleAdvisorActions(action, parseInt(advisorRow.dataset.asesorId), advisorRow); return; }
+                if (action === 'load-schedule' || action === 'delete-schedule') { handleSavedScheduleActions(action, actionTarget.dataset.name); return; }
+                if (action === 'open-weekly-edit') { openWeeklyEditModal(parseInt(actionTarget.dataset.asesorId), actionTarget.dataset.day); return; }
+            });
+            
+            document.body.addEventListener('click', e => {
+                const modal = e.target.closest('.fixed');
+                if (e.target.id === 'confirm-delete') { removeAdvisor(parseInt(e.target.dataset.asesorId)); if (modal) modal.classList.add('hidden'); }
+                if (e.target.id === 'confirm-reset') { resetSchedules(); if (modal) modal.classList.add('hidden'); }
+                if (e.target.id === 'confirm-save') { const name = document.getElementById('save-name-input').value.trim(); if(name) { saveCurrentSchedule(name); if (modal) modal.classList.add('hidden'); document.getElementById('save-name-input').value = ''; } }
+                if (e.target.id === 'confirm-delete-saved') { deleteSavedSchedule(e.target.dataset.name); if (modal) modal.classList.add('hidden'); }
+            });
+
+            function handleAdvisorActions(action, asesorId, advisorRow) {
+                 const asesor = asesores.find(a => a.id === asesorId);
+                 if (!asesor) return;
+                 switch (action) {
+                     case 'edit-advisor': {
+                         const nameSpan = advisorRow.querySelector('.advisor-name');
+                         nameSpan.contentEditable = true; nameSpan.focus();
+                         document.execCommand('selectAll', false, null);
+                         const onBlur = () => {
+                             nameSpan.contentEditable = false;
+                             const newName = nameSpan.textContent.trim();
+                             if (asesor.nombre !== newName && newName) { asesor.nombre = newName; updateAllSummariesAndState(); showToast('Nombre de asesor actualizado.');} 
+                             else { nameSpan.textContent = asesor.nombre; }
+                             nameSpan.removeEventListener('blur', onBlur); nameSpan.removeEventListener('keydown', onKeydown);
+                         };
+                         const onKeydown = (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); nameSpan.blur(); }};
+                         nameSpan.addEventListener('blur', onBlur); nameSpan.addEventListener('keydown', onKeydown);
+                         break;
+                     }
+                     case 'delete-advisor':
+                         document.getElementById('advisor-name-to-delete').textContent = asesor.nombre;
+                         document.getElementById('confirm-delete').dataset.asesorId = asesorId;
+                         document.getElementById('delete-modal').classList.remove('hidden');
+                         break;
+                     case 'toggle-workday':
+                         const currentTurno = asesor.horario[estado.currentDay];
+                         if (typeof currentTurno === 'object' && Object.keys(currentTurno).length > 0) {
+                             asesor.horario[estado.currentDay] = 'LIBRE';
+                         } else {
+                             asesor.horario[estado.currentDay] = { inicio: 8, descanso: 12 };
+                         }
+                         updateAllSummariesAndState();
+                         break;
+                 }
+            }
+            
+            function handleSavedScheduleActions(action, name) {
+                if (action === 'load-schedule') { loadSchedule(name); } 
+                else if (action === 'delete-schedule') {
+                    document.getElementById('schedule-name-to-delete').textContent = `"${name}"`;
+                    document.getElementById('confirm-delete-saved').dataset.name = name;
+                    document.getElementById('delete-saved-modal').classList.remove('hidden');
+                }
+            }
+
+            document.getElementById('weekly-edit-modal').addEventListener('click', e => {
+                const modal = document.getElementById('weekly-edit-modal');
+                const target = e.target;
+                if (!target.closest('.bg-white')) {
+                    modal.classList.add('hidden');
+                } else if (target.id === 'work-status-toggle') {
+                    modal.querySelector('#shift-details').classList.toggle('hidden');
+                } else if (target.id === 'save-weekly-edit') {
+                    const { asesorId, day } = modal.dataset;
+                    const asesor = asesores.find(a => a.id === parseInt(asesorId));
+                    const isWorking = !modal.querySelector('#shift-details').classList.contains('hidden');
+                    if (isWorking) {
+                        const inicio = parseInt(modal.querySelector('#start-time-select').value);
+                        const descansoValue = modal.querySelector('#break-time-select').value;
+                        asesor.horario[day] = { inicio, descanso: descansoValue ? parseInt(descansoValue) : undefined };
+                    } else {
+                        asesor.horario[day] = 'LIBRE';
+                    }
+                    modal.classList.add('hidden');
+                    updateAllSummariesAndState();
+                    showToast(`Horario de ${asesor.nombre} para ${day.toLowerCase()} actualizado.`);
+                }
+            });
+            
+            guidedGenModal.addEventListener('click', e => {
+                const targetId = e.target.id;
+                if (targetId === 'guided-gen-close-btn' || targetId === 'guided-gen-cancel-btn') { guidedGenModal.classList.add('hidden'); }
+                if (targetId === 'guided-gen-next-btn') {
+                    document.getElementById('guided-gen-step-1').classList.add('hidden');
+                    document.getElementById('guided-gen-step-2').classList.remove('hidden');
+                    document.getElementById('guided-gen-back-btn').classList.remove('hidden');
+                    document.getElementById('guided-gen-next-btn').classList.add('hidden');
+                    document.getElementById('guided-gen-finish-btn').classList.remove('hidden');
+                }
+                if (targetId === 'guided-gen-back-btn') {
+                    document.getElementById('guided-gen-step-1').classList.remove('hidden');
+                    document.getElementById('guided-gen-step-2').classList.add('hidden');
+                    document.getElementById('guided-gen-back-btn').classList.add('hidden');
+                    document.getElementById('guided-gen-next-btn').classList.remove('hidden');
+                    document.getElementById('guided-gen-finish-btn').classList.add('hidden');
+                }
+                if (targetId === 'guided-gen-finish-btn') { generateGuidedSchedule(); }
+                if (targetId === 'fill-random-days-off') { fillRandomDaysOff(); }
+                if (targetId === 'fill-random-shifts') { fillRandomShifts(); }
+            });
+
+            guidedGenModal.addEventListener('input', e => {
+                if (e.target.matches('.guided-days-off-input')) { updateDaysOffCounter(); }
+                if (e.target.matches('.guided-shift-input')) { updateWeeklyShiftsCounter(); }
+            });
+            
+            window.addEventListener('resize', () => {
+                if(estado.currentView === 'daily') {
+                    const firstCell = dailyViewContainer.querySelector('.advisor-row > div:nth-child(3)');
+                    if(firstCell) { estado.dragInfo.cellWidth = firstCell.offsetWidth; renderAllShiftBlocks(); }
+                }
+            });
+
+            document.getElementById('search-advisor-input').addEventListener('input', (e) => {
+                const searchTerm = e.target.value.toLowerCase().trim();
+                document.querySelectorAll('.advisor-row').forEach(row => {
+                    const name = row.querySelector('.advisor-name').textContent.toLowerCase();
+                    row.style.display = name.includes(searchTerm) ? 'grid' : 'none';
+                });
+            });
+
+            dailyViewContainer.addEventListener('dragstart', e => {
+                if (e.target.classList.contains('advisor-row')) {
+                    e.target.classList.add('dragging-row');
+                }
+            });
+
+            dailyViewContainer.addEventListener('dragend', e => {
+                const draggingRow = document.querySelector('.dragging-row');
+                if (draggingRow) {
+                    draggingRow.classList.remove('dragging-row');
+                }
+                 document.querySelectorAll('.drop-target-row').forEach(el => el.classList.remove('drop-target-row'));
+            });
+
+            dailyViewContainer.addEventListener('dragover', e => {
+                e.preventDefault();
+                const targetRow = e.target.closest('.advisor-row');
+                const draggingRow = document.querySelector('.dragging-row');
+                
+                document.querySelectorAll('.drop-target-row').forEach(el => {
+                    el.classList.remove('drop-target-row');
+                });
+
+                if (targetRow && targetRow !== draggingRow) {
+                    targetRow.classList.add('drop-target-row');
+                }
+            });
+
+            dailyViewContainer.addEventListener('dragleave', e => {
+                 if (e.target.closest('.advisor-row')) {
+                    e.target.closest('.advisor-row').classList.remove('drop-target-row');
+                 }
+            });
+
+            dailyViewContainer.addEventListener('drop', e => {
+                e.preventDefault();
+                const container = document.getElementById('advisors-grid-container');
+                const draggingRow = container.querySelector('.dragging-row');
+                const targetRow = e.target.closest('.advisor-row');
+                
+                document.querySelectorAll('.drop-target-row').forEach(el => el.classList.remove('drop-target-row'));
+
+                if (!draggingRow || !targetRow || draggingRow === targetRow) {
+                    return;
+                }
+                
+                const draggedId = parseInt(draggingRow.dataset.asesorId);
+                const targetId = parseInt(targetRow.dataset.asesorId);
+
+                const draggedAdvisor = asesores.find(a => a.id === draggedId);
+                const targetAdvisor = asesores.find(a => a.id === targetId);
+                
+                if (draggedAdvisor && targetAdvisor) {
+                    const tempHorario = JSON.parse(JSON.stringify(draggedAdvisor.horario));
+                    draggedAdvisor.horario = JSON.parse(JSON.stringify(targetAdvisor.horario));
+                    targetAdvisor.horario = tempHorario;
+
+                    updateAllSummariesAndState();
+                    showToast(`Horario intercambiado entre ${draggedAdvisor.nombre} y ${targetAdvisor.nombre}.`, 'success');
+                }
+            });
+            
+             // --- Lógica para el Modo Oscuro ---
+            if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                themeToggleLightIcon.classList.remove('hidden');
+            } else {
+                themeToggleDarkIcon.classList.remove('hidden');
+            }
+
+            themeToggleButton.addEventListener('click', function() {
+                themeToggleDarkIcon.classList.toggle('hidden');
+                themeToggleLightIcon.classList.toggle('hidden');
+                if (localStorage.getItem('color-theme')) {
+                    if (localStorage.getItem('color-theme') === 'light') {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('color-theme', 'dark');
+                    } else {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('color-theme', 'light');
+                    }
+                } else {
+                    if (document.documentElement.classList.contains('dark')) {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('color-theme', 'light');
+                    } else {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('color-theme', 'dark');
+                    }
+                }
+            });
+
+        }
+
+        function init(){
+            loadDemandData(); 
+            loadLastState();
+            renderDaySelector();
+            initEventListeners();
+            renderSavedSchedulesList();
+            updateAllSummariesAndState();
+        }
+
+        init();
+    });
+    </script>
+</body>
+</html>
